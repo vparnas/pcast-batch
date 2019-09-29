@@ -1,0 +1,83 @@
+#!/bin/bash
+
+[ -f ".pcastgen.cfg" ] && . ".pcastgen.cfg"
+
+function process_list
+{
+    OLD_IFS="$IFS" # See LESSON in `notes`
+    IFS="$DELIM"
+    cd "$outdir"
+    while read -r date input output title cut desc; do
+        echo -e "date: $date\ninput: $input\noutput: $output\ntitle: $title\ncut: $cut"
+        input_tmp="$output""_tmp.mp3"
+        inputfile="$inputdir/$input"
+        outfile="$outdir/$output"
+        temp_files=()
+        $QUIET || echo "Processing ${inputfile##*/}"
+        [ ! -f "$inputfile" ] && echo "${inputfile##*/} not found, skipping" && continue
+        #[ -f "$outfile" ] && echo "Destination ${outfile##*/} already exists, skipping" && continue
+        if [ -n "$cut" ]; then
+            cut="0;$cut;0"
+            segments=()
+            IFS="$OLD_IFS"
+            while read -r start && read -r end; do
+                [ "$start" == 0 ] && from="" || from="-ss $start"
+                [ "$end" == 0 ] && to="" || to="-to $end"
+                ([ -n "$from" ] || [ -n "$to" ]) && segments+=("$from $to")
+            done <<< $(echo "$cut" | tr ',;-' '\n')
+            cut_idx=0
+            for i in $(seq ${#segments[@]}); do
+                segment="${segments[$(( i-1 ))]}"
+                tmp_file="$output.$cut_idx.mp3"
+                temp_files+=("$tmp_file")
+                (( cut_idx++ ))
+                if [ -f "$tmp_file" ]; then
+                    echo "${tmp_file##*/} exists, skipping step. Delete to reprocess."
+                    continue
+                fi
+                $QUIET || echo "Creating segment ${segment[@]} in ${tmp_file##*/}..."
+                ffmpeg -v warning -n -i "$inputfile" ${segment[@]} "$tmp_file"
+            done
+            $QUIET || echo "Combining individual segments into ${input_tmp##*/}..."
+            # TODO: causes delimiter inconsistency and breakage
+            echo "temp_files: ${temp_files[@]}"
+            ffmpeg -v warning -n -f concat -safe 0 -i <(for f in "${temp_files[@]}"; do echo "file '$PWD/$f'"; done) -c copy "$input_tmp"
+            $DELETE_TEMP && \
+            for f in "${temp_files[@]}"; do
+                $QUIET || echo "Deleting temp file ${f##*/}."
+                rm "$f"
+            done
+            IFS="$DELIM"
+        else
+            cp "$inputfile" "$input_tmp"
+        fi
+        if [ -n "$filter_cmd" ]; then
+            $QUIET || echo "Executing filter command..."
+            (
+                input="$input_tmp" && eval "$filter_cmd $outfile"
+                if $DELETE_TEMP; then
+                    $QUIET || echo "Deleting ${input_tmp##*/}"
+                    rm "$input_tmp"
+                fi
+            )
+        else
+            mv "$input_tmp" "$outfile"
+        fi
+        $QUIET || echo "Generated ${outfile##*/}"
+        if [ -n "$output_template" ] && [ -n "$output_append_file" ]; then
+            out_row=$(eval echo "$output_template")
+            $QUIET || echo "$out_row >> $output_append_file"
+            if grep -qF "$out_row" "$output_append_file"; then
+                echo "${output_append_file##*/} already contains the entry, skipping."
+            else
+                echo "$out_row" >> "$output_append_file"
+            fi
+        fi
+    done
+}
+
+[ ! -f "$1" ] && echo "$0: Must specify a valid .lst file" && exit 1
+
+#set -x
+sed -r '/^(#|\s*$|date)/d' "$1" | process_list
+#set +x
