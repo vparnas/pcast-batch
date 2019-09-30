@@ -1,0 +1,118 @@
+#!/usr/bin/perl
+#
+# Copyright 2019 Vitaly Parnas <vp330@parnas.me>
+#
+# Permission to use, copy, modify, and/or distribute this software for any
+# purpose with or without fee is hereby granted, provided that the above
+# copyright notice and this permission notice appear in all copies.
+#
+# THE SOFTWARE IS PROVIDED "AS IS" AND THE AUTHOR DISCLAIMS ALL WARRANTIES
+# WITH REGARD TO THIS SOFTWARE INCLUDING ALL IMPLIED WARRANTIES OF
+# MERCHANTABILITY AND FITNESS. IN NO EVENT SHALL THE AUTHOR BE LIABLE FOR
+# ANY SPECIAL, DIRECT, INDIRECT, OR CONSEQUENTIAL DAMAGES OR ANY DAMAGES
+# WHATSOEVER RESULTING FROM LOSS OF USE, DATA OR PROFITS, WHETHER IN AN
+# ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING OUT OF
+# OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
+
+use strict;
+use warnings;
+use File::Basename;
+use File::Copy;
+
+my $DELIM = ';';
+my $QUIET = 0;
+my $DELETE_TEMP = 0;
+my $INPUTDIR = "";
+my $OUTDIR = "";
+my $FILTER_CMD = "";
+my $OUTPUT_TEMPLATE = "";
+my $OUTPUT_APPEND_FILE = "";
+my $CONF_FILE='.pcastgen.cfg';
+
+eval `cat $CONF_FILE` or warn "couldn't run $CONF_FILE";
+print "inputdir: $INPUTDIR\n" unless $QUIET;
+open (IN_FILE, "< $ARGV[0]")
+    or die "Couldn't open input file: $!\n";
+chdir $OUTDIR;
+$OUTDIR="";
+
+while (<IN_FILE>) {
+    chomp;
+    next if /^(#|\s*$|date)/i; # comments, blanks, or header
+    my ($date, $input, $output, $title, $cut, $desc) = split /$DELIM/;
+    print "date=$date, i=$input, o=$output, t=$title, c=$cut, desc=$desc\n" 
+    unless $QUIET;
+    $input = $INPUTDIR . $input;
+    $output = $OUTDIR . $output;
+    my $pre_output = $output . "_tmp.mp3";
+
+    print "\nProcessing " . basename($input) . "\n";
+    (! -f $input) and print "$input not found, skip.\n" and next;
+    (-f $output) and print "Output $output exists, skip.\n" and next;
+    if ($cut) {
+        my @temp_files = ();
+        my @time_segments = ();
+        my @times = split /[,;-]/, "0,$cut,0";
+        my $concat_temp='input_files.txt';
+
+        while(my ($start,$end) = splice(@times,0,2)) {
+            #print "s: $start, e: $end\n";
+            my $from = $start eq '0' ? "" : "-ss $start";
+            my $to = ($end eq '0') ? "" : "-to $end";
+            push (@time_segments, "$from $to") if ($from || $to);
+        }
+        print "Time segments: @time_segments\n" unless $QUIET;
+        my $cut_idx = 0;
+        foreach (@time_segments) {
+            my $tmp_file = "$output.$cut_idx.mp3";
+            push (@temp_files, $tmp_file);
+            $cut_idx++;
+            if ( -f "$tmp_file" ) {
+                print "$tmp_file exists, skip.\n";
+            } else {
+                print "Writing segment $_ to $tmp_file...\n";
+                system "ffmpeg -v error -n -i $input $_ $tmp_file";
+            }
+        }
+        print "Combining time segments into $pre_output...\n";
+        open(my $fh, '>', $concat_temp) or die "Could not open file $concat_temp\n";
+        foreach (@temp_files) {
+            say $fh "file '$_'";
+        }
+        close $fh;
+        system "ffmpeg -v warning -n -f concat -safe 0 -i $concat_temp -c copy $pre_output";
+        if ($DELETE_TEMP) {
+            print "Deleting temp files @temp_files.\n" unless $QUIET;
+            unlink @temp_files;
+            unlink $concat_temp;
+        }
+    } else {
+        copy $input, $pre_output;
+    }
+    if ($FILTER_CMD) {
+        print "Executing filter command...\n";
+        my $cmd = eval "$FILTER_CMD";
+        #print "cmd: $cmd\n";
+        system $cmd;
+        if ($DELETE_TEMP) {
+            print "Deleting $pre_output.\n" unless $QUIET;
+            unlink $pre_output;
+        }
+    } else {
+        move $pre_output, $output;
+    }
+    print "Generated $output\n";
+    if ($OUTPUT_TEMPLATE and $OUTPUT_APPEND_FILE) {
+        my $out_row = eval "$OUTPUT_TEMPLATE";
+        print "$out_row >> $OUTPUT_APPEND_FILE\n" unless $QUIET;
+        open(my $fh, '>>', $OUTPUT_APPEND_FILE) or die "Could not open file '$OUTPUT_APPEND_FILE' $!";
+        if ((system "grep -qF \"$out_row\" $OUTPUT_APPEND_FILE") == 0) {
+            print "$OUTPUT_APPEND_FILE already contains template entry.\n";
+        } else {
+            say $fh $out_row;
+        }
+        close $fh;
+    }
+}
+
+close IN_FILE;
