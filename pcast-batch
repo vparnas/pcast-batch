@@ -27,9 +27,18 @@ my $OUTDIR = "";
 my $FILTER_CMD = "";
 my $OUTPUT_TEMPLATE = "";
 my $OUTPUT_APPEND_FILE = "";
-my $CONF_FILE='.pcastgen.cfg';
+my $CONF_FILE = '.' . basename($0) . '.cfg';
 
-eval `cat $CONF_FILE` or warn "couldn't run $CONF_FILE";
+( $ARGV[0] ) or die "Must specify audio list\n";
+
+foreach ("./$CONF_FILE", $ENV{HOME} . '/' . $CONF_FILE) {
+    if (-e) {
+        print "Reading configuration $_\n";
+        eval `cat $_`;
+        last;
+    }
+}
+
 print "inputdir: $INPUTDIR\n" unless $QUIET;
 open (IN_FILE, "< $ARGV[0]")
     or die "Couldn't open input file: $!\n";
@@ -91,6 +100,7 @@ while (<IN_FILE>) {
     }
     if ($FILTER_CMD) {
         print "Executing filter command...\n";
+        my $input = $pre_output;
         my $cmd = eval "$FILTER_CMD";
         #print "cmd: $cmd\n";
         system $cmd;
