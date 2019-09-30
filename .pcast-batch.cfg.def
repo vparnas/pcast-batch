@@ -1,0 +1,11 @@
+# vim: set filetype=perl : 
+
+$DELIM = ';';
+$QUIET = 1;
+$DELETE_TEMP = 1;
+$INPUTDIR = "$ENV{HOME}/input_audio/";
+$OUTDIR = "$ENV{HOME}/podcasts/";
+$OUTPUT_TEMPLATE = '"$date##$title#/podcasts/$output##$desc"';
+$OUTPUT_APPEND_FILE = "all-pcasts.csv";
+
+$FILTER_CMD='"ffmpeg -v warning -n -i $input -i $INPUTDIR/intro_outro_64k.mp3 -filter_complex acrossfade=d=4:o=1:c1=qsin:c2=qsin $output"';
