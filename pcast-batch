@@ -16,6 +16,7 @@
 
 use strict;
 use warnings;
+use 5.010;
 use File::Basename;
 use File::Copy;
 
@@ -33,57 +34,58 @@ my $CONF_FILE = '.' . basename($0) . '.cfg';
 
 foreach ("./$CONF_FILE", $ENV{HOME} . '/' . $CONF_FILE) {
     if (-e) {
-        print "Reading configuration $_\n";
+        say "Reading configuration $_";
         eval `cat $_`;
         last;
     }
 }
-
-print "inputdir: $INPUTDIR\n" unless $QUIET;
-open (IN_FILE, "< $ARGV[0]")
-    or die "Couldn't open input file: $!\n";
-chdir $OUTDIR;
+(-d $OUTDIR) or die "Directory $OUTDIR nonexistent\n";
+(-d $INPUTDIR) or die "Directory $INPUTDIR nonexistent\n";
+say "inputdir: $INPUTDIR" unless $QUIET;
+open (IN_FILE, "< $ARGV[0]") or die "Couldn't open input file: $!\n";
+chdir $OUTDIR; 
 $OUTDIR="";
 
 while (<IN_FILE>) {
     chomp;
     next if /^(#|\s*$|date)/i; # comments, blanks, or header
     my ($date, $input, $output, $title, $cut, $desc) = split /$DELIM/;
-    print "date=$date, i=$input, o=$output, t=$title, c=$cut, desc=$desc\n" 
+    say "date=$date, i=$input, o=$output, t=$title, c=$cut, desc=$desc" 
     unless $QUIET;
     $input = $INPUTDIR . $input;
     $output = $OUTDIR . $output;
     my $pre_output = $output . "_tmp.mp3";
 
-    print "\nProcessing " . basename($input) . "\n";
-    (! -f $input) and print "$input not found, skip.\n" and next;
-    (-f $output) and print "Output $output exists, skip.\n" and next;
+    say "\nProcessing " . basename($input);
+    (! -f $input) and say "$input not found, skip." and next;
+    (-f $output) and say "Output $output exists, skip." and next;
     if ($cut) {
         my @temp_files = ();
         my @time_segments = ();
+        # Convert the 'exclude' string of timestamps to an 'include' string
         my @times = split /[,;-]/, "0,$cut,0";
         my $concat_temp='input_files.txt';
 
         while(my ($start,$end) = splice(@times,0,2)) {
-            #print "s: $start, e: $end\n";
+            #say "s: $start, e: $end";
             my $from = $start eq '0' ? "" : "-ss $start";
             my $to = ($end eq '0') ? "" : "-to $end";
             push (@time_segments, "$from $to") if ($from || $to);
         }
-        print "Time segments: @time_segments\n" unless $QUIET;
+        say "Time segments: @time_segments" unless $QUIET;
         my $cut_idx = 0;
         foreach (@time_segments) {
             my $tmp_file = "$output.$cut_idx.mp3";
             push (@temp_files, $tmp_file);
             $cut_idx++;
             if ( -f "$tmp_file" ) {
-                print "$tmp_file exists, skip.\n";
+                say "$tmp_file exists, skip.";
             } else {
-                print "Writing segment $_ to $tmp_file...\n";
+                say "Writing segment $_ to $tmp_file...";
                 system "ffmpeg -v error -n -i $input $_ $tmp_file";
             }
         }
-        print "Combining time segments into $pre_output...\n";
+        say "Combining time segments into $pre_output...";
         open(my $fh, '>', $concat_temp) or die "Could not open file $concat_temp\n";
         foreach (@temp_files) {
             say $fh "file '$_'";
@@ -91,7 +93,7 @@ while (<IN_FILE>) {
         close $fh;
         system "ffmpeg -v warning -n -f concat -safe 0 -i $concat_temp -c copy $pre_output";
         if ($DELETE_TEMP) {
-            print "Deleting temp files @temp_files.\n" unless $QUIET;
+            say "Deleting temp files @temp_files." unless $QUIET;
             unlink @temp_files;
             unlink $concat_temp;
         }
@@ -99,25 +101,25 @@ while (<IN_FILE>) {
         copy $input, $pre_output;
     }
     if ($FILTER_CMD) {
-        print "Executing filter command...\n";
+        say "Executing filter command...";
         my $input = $pre_output;
         my $cmd = eval "$FILTER_CMD";
-        #print "cmd: $cmd\n";
+        #say "cmd: $cmd";
         system $cmd;
         if ($DELETE_TEMP) {
-            print "Deleting $pre_output.\n" unless $QUIET;
+            say "Deleting $pre_output." unless $QUIET;
             unlink $pre_output;
         }
     } else {
         move $pre_output, $output;
     }
-    print "Generated $output\n";
+    say "Generated $output";
     if ($OUTPUT_TEMPLATE and $OUTPUT_APPEND_FILE) {
         my $out_row = eval "$OUTPUT_TEMPLATE";
-        print "$out_row >> $OUTPUT_APPEND_FILE\n" unless $QUIET;
+        say "$out_row >> $OUTPUT_APPEND_FILE" unless $QUIET;
         open(my $fh, '>>', $OUTPUT_APPEND_FILE) or die "Could not open file '$OUTPUT_APPEND_FILE' $!";
         if ((system "grep -qF \"$out_row\" $OUTPUT_APPEND_FILE") == 0) {
-            print "$OUTPUT_APPEND_FILE already contains template entry.\n";
+            say "$OUTPUT_APPEND_FILE already contains template entry.";
         } else {
             say $fh $out_row;
         }
