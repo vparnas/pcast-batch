@@ -1,0 +1,16 @@
+# vim: set filetype=markdown : 
+
+**LESSON**: In shell, both *while* and *for* loops rely on $IFS (input field separator). Manipulating it creates too many SIDE EFFECTS. +1 for functional languages. How many hours did I spend debugging? Don't use shell scripting for stuff like this. 
+
+## TODO 
+
+1. if date undef, obtain from mod time.
+1. Use a more ephemeral name: $concat_temp='input_files.txt';
+
+## Comments 
+
+- A `do` block (`do $CONF_FILE`) cannot modify lexicals in containing scope.
+
+## Thoughts
+
+- Rename command for 'auto' setting of output filename

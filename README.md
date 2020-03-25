@@ -42,7 +42,7 @@ The application skips any nonexistent input audio and does not overwrite any alr
 
 ## Configuration
 
-Include a configuration file `.pcast-batch.cfg` in the current or home directory to overwrite the restricted default values. See `.pcast-batch.cfg.def` for an example.
+Include a configuration file `.pcast-batch.cfg` in the current or home directory, or `~/.config/pcast-batch.cfg` to overwrite the restricted default values. See `.pcast-batch.cfg.def` for an example.
 
 ### Custom audio filter <a name="filter" />
 

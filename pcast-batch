@@ -1,6 +1,6 @@
 #!/usr/bin/perl
 #
-# (c) 2019 Vitaly Parnas <vp330@parnas.me>
+# (c) 2019-2020 Vitaly Parnas <vp330@parnas.me>
 # See LICENSE for licensing information.
 
 use strict;
@@ -17,11 +17,12 @@ my $OUTDIR = "";
 my $FILTER_CMD = "";
 my $OUTPUT_TEMPLATE = "";
 my $OUTPUT_APPEND_FILE = "";
-my $CONF_FILE = '.' . basename($0) . '.cfg';
+my $CONF_FILE = basename($0) . '.cfg';
 
 ( $ARGV[0] ) or die "Must specify audio list\n";
 
-foreach ("./$CONF_FILE", $ENV{HOME} . '/' . $CONF_FILE) {
+foreach ("./.$CONF_FILE", "$ENV{HOME}/.$CONF_FILE", 
+    "$ENV{HOME}/.config/$CONF_FILE") {
     if (-e) {
         say "Reading configuration $_";
         eval `cat $_`;
